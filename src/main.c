@@ -2,6 +2,11 @@
 #include <string.h>
 #include <stdlib.h> //for memory allocation (malloc, calloc, realloc, etc)
 #include <stdint.h>
+#include <stdbool.h>
+
+#define MAX 1024
+#define MASK2 0x80
+int INSTRUCTION_COUNT = 0;
 
 char *instructions[] = {
     "ADD",
@@ -18,20 +23,24 @@ char *instructions[] = {
     "SB"
 };
 char *instructionMemory[1024];
-
 int8_t dataMemory[2048];
-
 uint16_t pc = 0; //program counter
+
+struct PipelineRegister {
+    char* instruction;  // Instruction string
+    char opcode[5];
+    char dReg[7];
+    char s2Reg[7];
+    char immediate[7];
+    char format;
+} IF_ID, ID_EX;
+
 uint8_t statusRegister; //create a status register
 int8_t registerFile [64]; //create a register file
 uint8_t statusRegister = 0b00000000; 
 
 
-#define MAX 1024
-#define SCHAR_MAX 127// Maximum value for an unsigned 8-bit integer
-#define SCHAR_MIN -128// Minimum value for a signed 8-bit integer
-#define MASK 256 // Mask for the 9th bit (carry bit)
-#define MASK2 0x80
+
 
 
 ///////////////////methods///////////////
@@ -47,9 +56,13 @@ int signedBinaryToInt(const char *binary_string);
 
 
 void encode(FILE *fptr, char buffer[MAX]);
+
 void fetch();
-void decode(char* instruction);
-void execute(char* opcode, char* dReg, char* s2Reg, char* immediate);
+void decode();
+void execute();
+
+void decodeHelper(char* instruction, struct PipelineRegister* reg);
+void executeHelper(char* opcode, char* dReg, char* s2Reg, char* immediate);
 
 
 void add(char* dReg, char* s2Reg);
@@ -69,6 +82,7 @@ int check_carry_overflow(int a, int b, char operation);
 int NegativeSign(int num) ;
 int SignFlag(int a , int b);
 int ZeroFlag(int a);
+bool isBranchOrJump(char* opcode);
 
 ////////////////////////////////////////
 
@@ -83,23 +97,58 @@ int main() {
     else 
         encode(fptr, buffer);
      
-    for(int i = 0; i<15; i++){
+    for(int i = 0; i<INSTRUCTION_COUNT; i++){
         printf("instructionMemory[%d]: %s\n",i,instructionMemory[i]);
     }
 
-   for(int i = 0; i<1; i++){
-        fetch();
-    }
- 
-    // //print registerFile
-    // for(int i = 0; i<10; i++){
-    //     printf("registerFile[%d]: %d\n",i,registerFile[i]);
-    // }
+    int cycles = 1;
+    int fetchCount = INSTRUCTION_COUNT;
+    int decodeCount = INSTRUCTION_COUNT;
+    int executeCount = INSTRUCTION_COUNT;
 
-    // //print dataMemory
-    // for(int i = 0; i<10; i++){
-    //     printf("dataMemory[%d]: %d\n",i,dataMemory[i]);
-    // }
+    while(fetchCount!=0 || decodeCount!=0 || executeCount!=0){
+        printf("cycle: %d\n",cycles);
+        if(cycles == 1){
+            fetch();
+            fetchCount--;
+        }
+        else if(cycles==2){
+            decode();
+            decodeCount--;
+            if(fetchCount!=0){
+                fetch();
+                fetchCount--;
+            }
+        }
+        else{
+            if(executeCount!=0){
+                execute();
+                executeCount--;
+            }
+            if(decodeCount!=0){
+                decode();
+                decodeCount--;
+            }
+            if(fetchCount!=0){
+                fetch();
+                fetchCount--;
+            }
+        }
+        if(decodeCount == 0){
+            IF_ID.instruction = NULL;
+        }
+        printf("fetchCount: %d\n",fetchCount);
+        printf("decodeCount: %d\n",decodeCount);
+        printf("executeCount: %d\n",executeCount);
+        cycles++;
+       
+    }
+        
+
+    for(int i = 0; i<8; i++){
+        printf("registerFile[%d]: %d\n",i,registerFile[i]);
+    }
+    
 
     return 0;
 }
@@ -126,6 +175,7 @@ void encode(FILE *fptr, char buffer[MAX]){
 
     int i = 0;
     while(fgets(buffer, MAX, fptr)) {
+            INSTRUCTION_COUNT ++;
             int count;
             char **strings = split(buffer," ", &count);
     
@@ -194,58 +244,82 @@ void encode(FILE *fptr, char buffer[MAX]){
 
 
 void fetch() {
-                    
-char *instruction = instructionMemory[pc];
-decode(instruction); 
-            pc++;
+    // if(IF_ID.instruction != NULL && (isBranchOrJump(ID_EX.opcode) && ID_EX.instruction != NULL)){
+    //     printf("Control Hazard: Stalling fetch\n");
+    //     ID_EX.instruction = NULL;
+    // }
+   // else{
+    IF_ID.instruction = instructionMemory[pc];
+    pc ++; // Increment program counter
+
+    printf("Fetching instruction %s\n",IF_ID.instruction);
     printf("pc: %d\n",pc);
+//}
 }
 
-void decode(char* instruction){
-    char opcode[5];
-    char dReg[7];
-    char s2Reg[7];
-    char immediate[7];
-    char format;
-    char* temp;
+void decode() {
+  // Check if there's an instruction in the IF/ID pipeline register
+  if (IF_ID.instruction != NULL ) {
+    // Decode instruction and store relevant information
+    // (opcode, registers, immediate value) in ID/EX register
+    decodeHelper(IF_ID.instruction, &ID_EX);
 
+    printf("decoding instruction %s\n",IF_ID.instruction);
+  }
+}
+
+void execute() {
+  // Check if there's an instruction in the ID/EX pipeline register
+  if (ID_EX.instruction != NULL) {
+    // Based on the opcode, execute the instruction using helper functions
+    // (add, sub, etc.) and update register file or status register
+    executeHelper(ID_EX.opcode, ID_EX.dReg, ID_EX.s2Reg, ID_EX.immediate);
+    printf("executing instruction %s\n",ID_EX.instruction);
+
+    // Clear ID/EX register for the next decode
+    ID_EX.instruction = NULL;
+  }
+}
+
+void decodeHelper(char* instruction, struct PipelineRegister* reg){
     for(int i = 0; i<4; i++){
-        opcode[i] = instruction[i];
+        reg->opcode[i] = instruction[i];
     }
-    opcode[4] = '\0';
+    reg->opcode[4] = '\0';
 
-    if(strcmp(opcode, "0000") == 0 || strcmp(opcode, "0001") == 0 || strcmp(opcode, "0010") == 0 || strcmp(opcode, "0101") == 0 || strcmp(opcode, "0110") == 0 || strcmp(opcode, "0111") == 0)
+    if(strcmp(reg->opcode, "0000") == 0 || strcmp(reg->opcode, "0001") == 0 || strcmp(reg->opcode, "0010") == 0 || strcmp(reg->opcode, "0101") == 0 || strcmp(reg->opcode, "0110") == 0 || strcmp(reg->opcode, "0111") == 0)
     {
-        format = 'R';
+        reg->format = 'R';
     }
     else{
-        format = 'I';
+        reg->format = 'I';
     }
 
     for(int i = 4; i<10; i++){
-        dReg[i-4] = instruction[i];
+        reg->dReg[i-4] = instruction[i];
     }
-    dReg[6] = '\0';
+    reg->dReg[6] = '\0';
 
 
-    if(format == 'R'){
+    if(reg->format == 'R'){
         for(int i = 10; i<16; i++){
-            s2Reg[i-10] = instruction[i];
+            reg->s2Reg[i-10] = instruction[i];
         }
-            s2Reg[6] = '\0';
+            reg->s2Reg[6] = '\0';
     }
     else{
         for(int i = 10; i<16; i++)
         {
-            immediate[i-10] = instruction[i]; 
+            reg->immediate[i-10] = instruction[i]; 
         }
-        immediate[6] = '\0';
+        reg->immediate[6] = '\0';
     }
+    
+    ID_EX.instruction = instruction;
 
-    execute(opcode, dReg, s2Reg, immediate);
 }
 
-void execute(char* opcode, char* dReg, char* s2Reg, char* immediate){
+void executeHelper(char* opcode, char* dReg, char* s2Reg, char* immediate){
         if(strcmp(opcode, "0000") == 0){
             add(dReg, s2Reg);
         }
@@ -282,6 +356,8 @@ void execute(char* opcode, char* dReg, char* s2Reg, char* immediate){
         else if(strcmp(opcode, "1011") == 0){
             sb(dReg,immediate);
         }
+
+
     }
 
 void add(char* dReg, char* s2Reg){
@@ -370,7 +446,7 @@ void beqz(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
     int immediateInt = binaryToInt(immediate);
     if(registerFile[dRegInt] == 0){
-        pc = pc + immediateInt;
+        pc = pc + 1 + immediateInt;
     }
 }
 
@@ -595,29 +671,6 @@ char* intToBinary8(int num) {
 }
 
 
-// char* convertRegDataToBinary(int num) {
-//   char* binary = (char*)malloc(7 * sizeof(char)); 
-//   if (binary == NULL) {
-//     printf("Memory allocation failed.\n");
-//     exit(1);
-//   }
-
-//   binary[8] = '\0'; // Null terminator
-
-//   // Handle negative numbers
-  
-//     num = (num & 0xFF) + (1 << 8); // Mask to 8 bits and add 2^8
-  
-
-//   // Convert to binary string
-//   for (int i = 7; i >= 0; i--) {
-//     binary[i] = (num & 1) ? '1' : '0';
-//     num >>= 1;  // Right shift by one bit
-//   }
-
-//   return binary;
-// }
-
 int binaryToInt(char* binary) {
     int result = 0;
     int len = strlen(binary);
@@ -715,3 +768,6 @@ int ZeroFlag(int a) {
     return (a == 0) ? 1 : 0; // Check if the number is zero
 }
 
+bool isBranchOrJump(char* opcode) {
+    return strcmp(opcode, "0100") == 0 || strcmp(opcode, "0111") == 0;
+}
