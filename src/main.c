@@ -66,9 +66,9 @@ void lb(char* dReg,char* immediate);
 void sb(char* dReg, char* immediate);
 
 int check_carry_overflow(int a, int b, char operation);
-int NegativeSign(int8_t num) ;
-int SignFlag(int8_t a , int8_t b);
-int ZeroFlag(int8_t a);
+int NegativeSign(int num) ;
+int SignFlag(int a , int b);
+int ZeroFlag(int a);
 
 ////////////////////////////////////////
 
@@ -87,11 +87,10 @@ int main() {
         printf("instructionMemory[%d]: %s\n",i,instructionMemory[i]);
     }
 
-   for(int i = 0; i<3; i++){
+   for(int i = 0; i<1; i++){
         fetch();
     }
-
-    
+ 
     // //print registerFile
     // for(int i = 0; i<10; i++){
     //     printf("registerFile[%d]: %d\n",i,registerFile[i]);
@@ -101,11 +100,6 @@ int main() {
     // for(int i = 0; i<10; i++){
     //     printf("dataMemory[%d]: %d\n",i,dataMemory[i]);
     // }
-
-        printf("CARRY: %d\n",carry_checker(30,1));
-        printf("OVERFLOW: %d\n",overflow_check(30,1,"add"));
-
-
 
     return 0;
 }
@@ -118,6 +112,15 @@ void encode(FILE *fptr, char buffer[MAX]){
     };
 
     for(int i = 0; i<64; i++){
+        if(i==0){
+            registerFile[i] = 9;
+            continue;
+        }
+        if(i==1){
+            registerFile[i] = 9;
+            continue;
+        }
+        
         registerFile[i] = 0;
     };
 
@@ -146,9 +149,6 @@ void encode(FILE *fptr, char buffer[MAX]){
                 format = 'I';
             }
 
-
-        
-            
             //get binary representation of registers and immediate values
             char* dReg = "";
             char* s1Reg = "";
@@ -288,46 +288,76 @@ void add(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
 
+    int carryOverflow = check_carry_overflow(registerFile[dRegInt], registerFile[s2RegInt], '+') ;
+    int negative = NegativeSign(registerFile[dRegInt] + registerFile[s2RegInt]);
+    int sign = SignFlag((carryOverflow & 0b10),negative);
+    int zero = ZeroFlag(registerFile[dRegInt] + registerFile[s2RegInt]);
+
     registerFile[dRegInt] = registerFile[dRegInt] + registerFile[s2RegInt];
 
-    // Check for carry
-    int carry = carry_checker(registerFile[dRegInt], registerFile[s2RegInt]);
-    statusRegister |= (carry << 4);
-
-    // Check for overflow
-    int overflow = overflow_check(registerFile[dRegInt], registerFile[s2RegInt], "add");
-    statusRegister |= (overflow << 3);
-
-    printf("statusRegister: %s\n",intToBinary8(statusRegister));
-
     // Update status register
-
+    statusRegister |= ((carryOverflow & 0b01) << 4);
+    statusRegister |= ((carryOverflow & 0b10) << 2);
+    statusRegister |= ((negative) << 2);
+    statusRegister |= (sign << 1);
+    statusRegister |= (zero << 0);
 }
 
 void sub(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
+
+    int carryOverflow = check_carry_overflow(registerFile[dRegInt], registerFile[s2RegInt], '-') ;
+    int negative = NegativeSign(registerFile[dRegInt] - registerFile[s2RegInt]);
+    int sign = SignFlag((carryOverflow & 0b10),negative);
+    int zero = ZeroFlag(registerFile[dRegInt] - registerFile[s2RegInt]);
+
+    
     registerFile[dRegInt] = registerFile[dRegInt] - registerFile[s2RegInt];
+
+    statusRegister |= ((carryOverflow & 0b10) << 2);
+    statusRegister |= ((negative) << 2);
+    statusRegister |= (sign << 1);
+    statusRegister |= (zero << 0);
 }
 
 void mul(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
-    registerFile[dRegInt] = registerFile[dRegInt] * registerFile[s2RegInt];
-}
 
+    int negative = NegativeSign(registerFile[dRegInt] * registerFile[s2RegInt]);
+    int zero = ZeroFlag(registerFile[dRegInt] * registerFile[s2RegInt]);
+
+    registerFile[dRegInt] = registerFile[dRegInt] * registerFile[s2RegInt];
+
+
+    statusRegister |= ((negative) << 2);
+    statusRegister |= (zero << 0);
+}
 
 void and(char* dReg, char* s1Reg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s1RegInt = binaryToInt(s1Reg);
     int s2RegInt = binaryToInt(s2Reg);
+    int negative = NegativeSign(registerFile[s1RegInt] & registerFile[s2RegInt]);
+    int zero = ZeroFlag(registerFile[dRegInt] * registerFile[s2RegInt]);
+
     registerFile[dRegInt] = registerFile[s1RegInt] & registerFile[s2RegInt];
+
+    statusRegister |= ((negative) << 2);
+    statusRegister |= (zero << 0);
 }
 
 void or(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
+    int negative = NegativeSign(registerFile[dRegInt] | registerFile[s2RegInt]);
+    int zero = ZeroFlag(registerFile[dRegInt] | registerFile[s2RegInt]);
+
     registerFile[dRegInt] = registerFile[dRegInt] | registerFile[s2RegInt];
+
+    statusRegister |= ((negative) << 2);
+    statusRegister |= (zero << 0);
 }
 
 void ldi(char* dReg, char* immediate){
@@ -342,7 +372,6 @@ void beqz(char* dReg, char* immediate){
     if(registerFile[dRegInt] == 0){
         pc = pc + immediateInt;
     }
-    printf("pc: %d\n",pc);
 }
 
 void jr(char* dReg, char* s2Reg){
@@ -350,41 +379,47 @@ void jr(char* dReg, char* s2Reg){
     int dregData = registerFile[dRegInt];
     int s2RegInt = binaryToInt(s2Reg);
     int s2RegData = registerFile[s2RegInt];
-    
-    
-    pc = binaryToInt(strcat(intToBinary8(dregData),intToBinary8(s2RegData)));
-    
+ 
+    pc = binaryToInt(strcat(intToBinary8(dregData),intToBinary8(s2RegData)));  
 }
 
 void slc(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
     int immediateInt = binaryToInt(immediate);
     int shiftAmount = immediateInt % 8; 
+    int negative = NegativeSign((registerFile[dRegInt] << shiftAmount) | (registerFile[dRegInt] >> (8 - shiftAmount)));
+
+    int zero = ZeroFlag((registerFile[dRegInt] << shiftAmount) | (registerFile[dRegInt] >> (8 - shiftAmount)));
+
     registerFile[dRegInt] = (registerFile[dRegInt] << shiftAmount) | (registerFile[dRegInt] >> (8 - shiftAmount));
+
+    statusRegister |= ((negative) << 2);
+    statusRegister |= (zero << 0);
 }
 
 void src(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
     int immediateInt = binaryToInt(immediate);
     int shiftAmount = immediateInt % 8; 
+    int negative = NegativeSign((registerFile[dRegInt] >> shiftAmount) | (registerFile[dRegInt] << (8 - shiftAmount)));
+    int zero = ZeroFlag((registerFile[dRegInt] >> shiftAmount) | (registerFile[dRegInt] << (8 - shiftAmount)));
+
     registerFile[dRegInt] = (registerFile[dRegInt] >> shiftAmount) | (registerFile[dRegInt] << (8 - shiftAmount));
-    
+
+    statusRegister |= ((negative) << 2);
+    statusRegister |= (zero << 0);
 }
 
 void lb(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
     int immediateInt = binaryToInt(immediate);
     registerFile[dRegInt] = dataMemory[immediateInt];
-
 }
-
 
 void sb(char* dReg,char* immediate){
     int dRegInt = binaryToInt(dReg);
     int immediateInt = binaryToInt(immediate);
-    dataMemory[immediateInt] = registerFile[dRegInt];
-    
-    
+    dataMemory[immediateInt] = registerFile[dRegInt];  
 }
 
 int getReg(char **strings,int index){
@@ -519,9 +554,6 @@ char* convertImmediateToBinary(int num) {
 }
 
 
-
-
-
 char* getRegIndexInt(int num) {
     char* binary = (char*)malloc(7 * sizeof(char));    if (binary == NULL) {
     printf("Memory allocation failed.\n");
@@ -634,51 +666,52 @@ int check_carry_overflow(int a, int b, char operation) {
   signed char sa = (signed char) a;
   signed char sb = (signed char) b;
 
+  int result =0;
+
   if (operation == '+') {
-    // Check for carry and overflow in addition
-    int sum = sa + sb;
-    carry = ((sum > SCHAR_MAX) || (sum < SCHAR_MIN)); // Overflow if sum out of signed char range
-
-    // Check for overflow based on signs and result (alternative approach)
-    
-    overflow = ((sa > 0 && sb > 0 && sum < 0) ||
-                 (sa < 0 && sb < 0 && sum >= 0));
-    
-  } else if (operation == '-') {
-    // Check for carry and overflow in subtraction (treat subtraction as negative addition)
-    int difference = sa - sb;
-    carry = (difference > SCHAR_MAX) || (difference < SCHAR_MIN); // Overflow if difference out of signed char range
-
-    // Alternative overflow check based on signs and result (not needed here)
-    /*
-    overflow = ((sa > 0 && sb < 0 && difference < 0) ||
-                 (sa < 0 && sb > 0 && difference >= 0));
-    */
-  } else {
-    // Handle invalid operation (optional)
-    return -1;
+    result = sa + sb;
+  }else{
+    result = sa - sb;
   }
+    
+    char arr[9] = "00000000";
+    arr[9] = '\0';
 
-  // Combine flags
+    int temp = 0;
+    arr[7] = (a & 0b00000001) && (b & 0b00000001) ? '1' : '0';
+    
+    for (int i = 1; i < 8; i++) {
+        int index = strlen(arr) - i;
+       
+        temp = (((a >> i) & 1) & ((b >> i) & 1)) || (((a >> i) & 1) & (arr[index])) || (((b >> i) & 1) & (arr[index]));
+        
+        arr[index-1] = temp==1 ? '1' : '0';
+    }
+
+    signed char carry_prev = (result & MASK2) >> 7;
+    
+    overflow = (arr[0] ^ arr[1]);
+
+    carry = arr[0] == '0'? 0 : 1;
+    
+
   return (carry << 0) | (overflow << 1);
 }
 
-
-
-int NegativeSign(int8_t num) {
+int NegativeSign(int num) {
     if(num < 0){
         return 1;
     }
     else{
         return 0;
-    } // Check if the most significant bit is 1
+    } 
 }
 
-int SignFlag(int8_t a , int8_t b) {
+int SignFlag(int a , int b) {
     return (a ^ b) ;  
 }
 
-int ZeroFlag(int8_t a) {
+int ZeroFlag(int a) {
     return (a == 0) ? 1 : 0; // Check if the number is zero
 }
 
