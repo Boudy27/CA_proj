@@ -10,8 +10,8 @@ int INSTRUCTION_COUNT = 0;
 int fetchCount = 0;
 int decodeCount = 0;
 int executeCount = 0;
-bool BEQZ_FLAG = false;
-bool BEQZ_FLAG2 = false;
+bool BEQZ_FLAG = false; 
+bool BEQZ_FLAG2 = false; 
 bool JUMP_FLAG = false;
 bool JUMP_FLAG2 = false;
 
@@ -31,10 +31,10 @@ char *instructions[] = {
 };
 char *instructionMemory[1024];
 int8_t dataMemory[2048];
-uint16_t pc = 0; //program counter
+uint16_t pc = 0; 
 
 struct PipelineRegister {
-    char* instruction;  // Instruction string
+    char* instruction;
     char opcode[5];
     char dReg[7];
     char s2Reg[7];
@@ -42,8 +42,8 @@ struct PipelineRegister {
     char format;
 } IF_ID, ID_EX;
 
-uint8_t statusRegister; //create a status register
-int8_t registerFile [64]; //create a register file
+uint8_t statusRegister; 
+int8_t registerFile [64]; 
 
 ///////////////////methods///////////////
 char **split(char *str,char *sep,int *count);
@@ -54,7 +54,6 @@ char* intToBinary4(int num);
 int getReg(char **strings,int index);
 int binaryToInt(char* binary);
 int signedBinaryToInt(const char *binary_string);
-// char* binaryToInt2sComplement(char* binary);
 
 
 void encode(FILE *fptr, char buffer[MAX]);
@@ -99,10 +98,8 @@ int main() {
 
     else 
         encode(fptr, buffer);
-     
-    // for(int i = 0; i<INSTRUCTION_COUNT; i++){
-    //     printf("instructionMemory[%d]: %s\n",i,instructionMemory[i]);
-    // }
+
+
 
     int cycles = 1;
     fetchCount = INSTRUCTION_COUNT;
@@ -110,7 +107,7 @@ int main() {
     executeCount = INSTRUCTION_COUNT;
 
     while(fetchCount!=0 || decodeCount!=0 || executeCount!=0){
-        printf("cycle: %d\n",cycles);
+        
         if(cycles == 1){
             fetch();
         }
@@ -134,13 +131,14 @@ int main() {
         if(decodeCount == 0){
             IF_ID.instruction = NULL;
         }
+        printf("---END OF CYCLE %d---\n",cycles);
         cycles++;
     }
 
     //print program has ended
     printf("------------Program has ended----------\n");
     //print pc
-    printf("pc: %d\n",pc);
+    printf("PC: %d\n",pc);
     //print SREG
     printf("SREG: %s\n",intToBinary8(statusRegister));
     //print registerFile if the register is not 0
@@ -160,7 +158,6 @@ int main() {
     return 0;
 }
 
-//create encode function
 void encode(FILE *fptr, char buffer[MAX]){
 
     for(int i = 0; i<2048; i++){
@@ -215,7 +212,6 @@ void encode(FILE *fptr, char buffer[MAX]){
             }
                     
             //concatenate binary strings to form instruction
-            //allocate memory for instructionBinary
             char *instructionBinary = (char*)malloc(16 * sizeof(char));
             strcpy(instructionBinary, opcodeBinary); 
             strcat(instructionBinary, dReg);
@@ -250,7 +246,7 @@ void fetch() {
     if(instructionMemory[pc] == NULL){
         return;
     }else{
-    printf("Fetching instructionMemory[%d]: %s\n",pc,instructionMemory[pc]);
+    printf("Fetching: %s\n",instructionMemory[pc]);
     IF_ID.instruction = instructionMemory[pc];
     pc++;
     fetchCount--;
@@ -277,19 +273,17 @@ void decode() {
     decodeHelper(IF_ID.instruction, &ID_EX);
     decodeCount--;
 
-    printf("decoding instruction of %s\n",IF_ID.instruction);
-    // pc++;
+    printf("Decoding  %s\n",IF_ID.instruction);
   }
 }
 
 void execute() {
   // Check if there's an instruction in the ID/EX pipeline register
   if (ID_EX.instruction != NULL) {
-    // Based on the opcode, execute the instruction using helper functions
-    // (add, sub, etc.) and update register file or status register
+    
     executeCount--;
     executeHelper(ID_EX.opcode, ID_EX.dReg, ID_EX.s2Reg, ID_EX.immediate);
-    printf("executing instruction  %s\n",ID_EX.instruction);
+    printf("Executing %s\n",ID_EX.instruction);
 
     // Clear ID/EX register for the next decode
     ID_EX.instruction = NULL;
@@ -480,7 +474,7 @@ void beqz(char* dReg, char* immediate){
     if(registerFile[dRegInt] == 0){
         printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
         pc = pc + immediateInt - 1;
-        printf("pc after branching: %d\n",pc);
+        printf("PC after branching: %d\n",pc);
         BEQZ_FLAG = true;
         BEQZ_FLAG2 = true;
 
@@ -582,10 +576,8 @@ int getReg(char **strings,int index){
 
 char **split(char *string,char *separators,int *count){
 
-    //get length of string
     int len = strlen(string);
 
-    //counter for substrings
     *count = 0 ;
 
     int i=0;
@@ -594,7 +586,7 @@ char **split(char *string,char *separators,int *count){
     {
         while(i < len)
         {
-            if(strchr(separators,string[i]) == NULL) //"To Do FINISHED"
+            if(strchr(separators,string[i]) == NULL) 
                 break;
             i++;
         }
@@ -653,7 +645,7 @@ char **split(char *string,char *separators,int *count){
 
 //FOR OPCODE
 char* intToBinary4(int num) {
-    char* binary = (char*)malloc(5 * sizeof(char)); // Allocate memory for the binary string
+    char* binary = (char*)malloc(5 * sizeof(char)); 
     if (binary == NULL) {
         printf("Memory allocation failed.\n");
         exit(1);
@@ -679,9 +671,6 @@ char* convertImmediateToBinary(int num) {
 
   binary[6] = '\0'; // Null terminator
 
-  // Handle negative numbers
-  
-    // Convert to positive using two's complement (add 2^n, where n is number of bits)
     num = (num & 0x3F) + (1 << 6); // Mask to 6 bits and add 2^6
   
 
@@ -725,11 +714,11 @@ char* intToBinary8(int num) {
         printf("Memory allocation failed.\n");
         exit(1);
     }
-    binary[8] = '\0'; // Null terminator
+    binary[8] = '\0';
     
     for (int i = 7; i >= 0; i--) {
-        binary[i] = (num & 1) ? '1' : '0'; // Masking least significant bit
-        num >>= 1; // Right shift by one bit
+        binary[i] = (num & 1) ? '1' : '0'; 
+        num >>= 1;
     }
     
     return binary;
@@ -740,9 +729,9 @@ int binaryToInt(char* binary) {
     int result = 0;
     int len = strlen(binary);
     for (int i = 0; i < len; i++) {
-        result <<= 1; // Left shift by one bit
+        result <<= 1; 
         if (binary[i] == '1') {
-            result |= 1; // Set the least significant bit to 1
+            result |= 1; 
         }
     }
     return result;
@@ -751,20 +740,16 @@ int binaryToInt(char* binary) {
 int signedBinaryToInt(const char *binary_string) {
   
   if (strlen(binary_string) != 6) {
-    // Handle error: Input string must be a 6-bit binary string
     return -1;
   }
 
-  // Convert the binary string to an unsigned integer
   int decimal_value = 0;
   for (int i = 0; i < 6; ++i) {
-    int bit_value = binary_string[i] - '0'; // Convert char to int (0 or 1)
-    decimal_value += bit_value << (5 - i); // Apply bit shift based on position
+    int bit_value = binary_string[i] - '0'; 
+    decimal_value += bit_value << (5 - i);
   }
 
-  // Check for negative numbers (MSB is 1)
   if (binary_string[0] == '1') {
-    // Calculate the two's complement by subtracting from 2^n (where n is the number of bits)
     decimal_value = - (1 << 6) + decimal_value;
   }
 
@@ -780,7 +765,6 @@ int check_carry_overflow(int a, int b, char operation) {
   int carry = 0;
   int overflow = 0;
 
-  // Convert to signed char for arithmetic operations
   signed char sa = (signed char) a;
   signed char sb = (signed char) b;
 
@@ -830,7 +814,7 @@ int SignFlag(int a , int b) {
 }
 
 int ZeroFlag(int a) {
-    return (a == 0) ? 1 : 0; // Check if the number is zero
+    return (a == 0) ? 1 : 0; 
 }
 
 bool isBranch(char* opcode) {
