@@ -1,12 +1,19 @@
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h> //for memory allocation (malloc, calloc, realloc, etc)
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 
 #define MAX 1024
 #define MASK2 0x80
 int INSTRUCTION_COUNT = 0;
+int fetchCount = 0;
+int decodeCount = 0;
+int executeCount = 0;
+bool BEQZ_FLAG = false;
+bool BEQZ_FLAG2 = false;
+bool JUMP_FLAG = false;
+bool JUMP_FLAG2 = false;
 
 char *instructions[] = {
     "ADD",
@@ -37,11 +44,6 @@ struct PipelineRegister {
 
 uint8_t statusRegister; //create a status register
 int8_t registerFile [64]; //create a register file
-uint8_t statusRegister = 0b00000000; 
-
-
-
-
 
 ///////////////////methods///////////////
 char **split(char *str,char *sep,int *count);
@@ -82,7 +84,8 @@ int check_carry_overflow(int a, int b, char operation);
 int NegativeSign(int num) ;
 int SignFlag(int a , int b);
 int ZeroFlag(int a);
-bool isBranchOrJump(char* opcode);
+bool isBranch(char* opcode);
+bool isJump(char* opcode);
 
 ////////////////////////////////////////
 
@@ -97,58 +100,62 @@ int main() {
     else 
         encode(fptr, buffer);
      
-    for(int i = 0; i<INSTRUCTION_COUNT; i++){
-        printf("instructionMemory[%d]: %s\n",i,instructionMemory[i]);
-    }
+    // for(int i = 0; i<INSTRUCTION_COUNT; i++){
+    //     printf("instructionMemory[%d]: %s\n",i,instructionMemory[i]);
+    // }
 
     int cycles = 1;
-    int fetchCount = INSTRUCTION_COUNT;
-    int decodeCount = INSTRUCTION_COUNT;
-    int executeCount = INSTRUCTION_COUNT;
+    fetchCount = INSTRUCTION_COUNT;
+    decodeCount = INSTRUCTION_COUNT;
+    executeCount = INSTRUCTION_COUNT;
 
     while(fetchCount!=0 || decodeCount!=0 || executeCount!=0){
         printf("cycle: %d\n",cycles);
         if(cycles == 1){
             fetch();
-            fetchCount--;
         }
         else if(cycles==2){
             decode();
-            decodeCount--;
             if(fetchCount!=0){
                 fetch();
-                fetchCount--;
             }
         }
         else{
             if(executeCount!=0){
                 execute();
-                executeCount--;
             }
-            if(decodeCount!=0){
+            if(decodeCount!=0 ){
                 decode();
-                decodeCount--;
             }
             if(fetchCount!=0){
                 fetch();
-                fetchCount--;
             }
         }
         if(decodeCount == 0){
             IF_ID.instruction = NULL;
         }
-        printf("fetchCount: %d\n",fetchCount);
-        printf("decodeCount: %d\n",decodeCount);
-        printf("executeCount: %d\n",executeCount);
         cycles++;
-       
     }
-        
 
-    for(int i = 0; i<8; i++){
-        printf("registerFile[%d]: %d\n",i,registerFile[i]);
+    //print program has ended
+    printf("------------Program has ended----------\n");
+    //print pc
+    printf("pc: %d\n",pc);
+    //print SREG
+    printf("SREG: %s\n",intToBinary8(statusRegister));
+    //print registerFile if the register is not 0
+    for(int i = 0; i<64; i++){
+        if(registerFile[i]!=0){
+            printf("registerFile[%d]: %d\n",i,registerFile[i]);
+        }
     }
-    
+
+    //print dataMemory if the dataMemory is not 0
+    for(int i = 0; i<2048; i++){
+        if(dataMemory[i]!=0){
+            printf("dataMemory[%d]: %d\n",i,dataMemory[i]);
+        }
+    }
 
     return 0;
 }
@@ -161,15 +168,6 @@ void encode(FILE *fptr, char buffer[MAX]){
     };
 
     for(int i = 0; i<64; i++){
-        if(i==0){
-            registerFile[i] = 9;
-            continue;
-        }
-        if(i==1){
-            registerFile[i] = 9;
-            continue;
-        }
-        
         registerFile[i] = 0;
     };
 
@@ -209,8 +207,6 @@ void encode(FILE *fptr, char buffer[MAX]){
                 s1Reg = getRegIndexInt(getReg(strings,1));
                 
                 immediate = convertImmediateToBinary(atoi(strings[2]));
-                printf("immediate: %s\n",immediate);
-
             }
             else{
                 dReg = getRegIndexInt(getReg(strings,1));
@@ -244,27 +240,45 @@ void encode(FILE *fptr, char buffer[MAX]){
 
 
 void fetch() {
-    // if(IF_ID.instruction != NULL && (isBranchOrJump(ID_EX.opcode) && ID_EX.instruction != NULL)){
-    //     printf("Control Hazard: Stalling fetch\n");
-    //     ID_EX.instruction = NULL;
-    // }
-   // else{
+    if((isBranch(ID_EX.opcode) && BEQZ_FLAG) || (isJump(ID_EX.opcode) && JUMP_FLAG)){
+         printf("Control Hazard: Stalling fetch\n");
+         ID_EX.instruction = NULL;
+         BEQZ_FLAG = false;
+         JUMP_FLAG = false;
+    }
+   else{
+    if(instructionMemory[pc] == NULL){
+        return;
+    }else{
+    printf("Fetching instructionMemory[%d]: %s\n",pc,instructionMemory[pc]);
     IF_ID.instruction = instructionMemory[pc];
-    pc ++; // Increment program counter
-
-    printf("Fetching instruction %s\n",IF_ID.instruction);
-    printf("pc: %d\n",pc);
-//}
+    pc++;
+    fetchCount--;
+    }
+   }
 }
 
 void decode() {
-  // Check if there's an instruction in the IF/ID pipeline register
-  if (IF_ID.instruction != NULL ) {
+    if((isBranch(ID_EX.opcode) && BEQZ_FLAG) || (isJump(ID_EX.opcode) && JUMP_FLAG)){
+        printf("Control Hazard: Stalling decode\n");
+        ID_EX.instruction = NULL;
+        IF_ID.instruction = instructionMemory[pc];
+    }
+    else if(BEQZ_FLAG2 || JUMP_FLAG2){
+        printf("Control Hazard: Stalling decode\n");
+        BEQZ_FLAG2 = false;
+        JUMP_FLAG2 = false;
+        return;
+    }
+    else
+    if (IF_ID.instruction != NULL) {
     // Decode instruction and store relevant information
     // (opcode, registers, immediate value) in ID/EX register
     decodeHelper(IF_ID.instruction, &ID_EX);
+    decodeCount--;
 
-    printf("decoding instruction %s\n",IF_ID.instruction);
+    printf("decoding instruction of %s\n",IF_ID.instruction);
+    // pc++;
   }
 }
 
@@ -273,8 +287,9 @@ void execute() {
   if (ID_EX.instruction != NULL) {
     // Based on the opcode, execute the instruction using helper functions
     // (add, sub, etc.) and update register file or status register
+    executeCount--;
     executeHelper(ID_EX.opcode, ID_EX.dReg, ID_EX.s2Reg, ID_EX.immediate);
-    printf("executing instruction %s\n",ID_EX.instruction);
+    printf("executing instruction  %s\n",ID_EX.instruction);
 
     // Clear ID/EX register for the next decode
     ID_EX.instruction = NULL;
@@ -363,6 +378,8 @@ void executeHelper(char* opcode, char* dReg, char* s2Reg, char* immediate){
 void add(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
 
     int carryOverflow = check_carry_overflow(registerFile[dRegInt], registerFile[s2RegInt], '+') ;
     int negative = NegativeSign(registerFile[dRegInt] + registerFile[s2RegInt]);
@@ -370,6 +387,7 @@ void add(char* dReg, char* s2Reg){
     int zero = ZeroFlag(registerFile[dRegInt] + registerFile[s2RegInt]);
 
     registerFile[dRegInt] = registerFile[dRegInt] + registerFile[s2RegInt];
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
 
     // Update status register
     statusRegister |= ((carryOverflow & 0b01) << 4);
@@ -382,6 +400,8 @@ void add(char* dReg, char* s2Reg){
 void sub(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
 
     int carryOverflow = check_carry_overflow(registerFile[dRegInt], registerFile[s2RegInt], '-') ;
     int negative = NegativeSign(registerFile[dRegInt] - registerFile[s2RegInt]);
@@ -390,6 +410,7 @@ void sub(char* dReg, char* s2Reg){
 
     
     registerFile[dRegInt] = registerFile[dRegInt] - registerFile[s2RegInt];
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((carryOverflow & 0b10) << 2);
     statusRegister |= ((negative) << 2);
@@ -400,6 +421,8 @@ void sub(char* dReg, char* s2Reg){
 void mul(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
 
     int negative = NegativeSign(registerFile[dRegInt] * registerFile[s2RegInt]);
     int zero = ZeroFlag(registerFile[dRegInt] * registerFile[s2RegInt]);
@@ -413,12 +436,15 @@ void mul(char* dReg, char* s2Reg){
 
 void and(char* dReg, char* s1Reg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
-    int s1RegInt = binaryToInt(s1Reg);
     int s2RegInt = binaryToInt(s2Reg);
-    int negative = NegativeSign(registerFile[s1RegInt] & registerFile[s2RegInt]);
-    int zero = ZeroFlag(registerFile[dRegInt] * registerFile[s2RegInt]);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
 
-    registerFile[dRegInt] = registerFile[s1RegInt] & registerFile[s2RegInt];
+    int negative = NegativeSign(registerFile[dRegInt] & registerFile[s2RegInt]);
+    int zero = ZeroFlag(registerFile[dRegInt] & registerFile[s2RegInt]);
+
+    registerFile[dRegInt] = registerFile[dRegInt] & registerFile[s2RegInt];
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((negative) << 2);
     statusRegister |= (zero << 0);
@@ -427,10 +453,14 @@ void and(char* dReg, char* s1Reg, char* s2Reg){
 void or(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
+
     int negative = NegativeSign(registerFile[dRegInt] | registerFile[s2RegInt]);
     int zero = ZeroFlag(registerFile[dRegInt] | registerFile[s2RegInt]);
 
     registerFile[dRegInt] = registerFile[dRegInt] | registerFile[s2RegInt];
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((negative) << 2);
     statusRegister |= (zero << 0);
@@ -439,14 +469,25 @@ void or(char* dReg, char* s2Reg){
 void ldi(char* dReg, char* immediate){
     int immediateInt = signedBinaryToInt(immediate);
     int dRegInt = binaryToInt(dReg);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
     registerFile[dRegInt] = immediateInt;
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
 }
 
 void beqz(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
-    int immediateInt = binaryToInt(immediate);
+    int immediateInt = signedBinaryToInt(immediate);
     if(registerFile[dRegInt] == 0){
-        pc = pc + 1 + immediateInt;
+        printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+        pc = pc + immediateInt - 1;
+        printf("pc after branching: %d\n",pc);
+        BEQZ_FLAG = true;
+        BEQZ_FLAG2 = true;
+
+        fetchCount = INSTRUCTION_COUNT - pc;
+        decodeCount = INSTRUCTION_COUNT - pc;
+        executeCount = INSTRUCTION_COUNT - pc;
+
     }
 }
 
@@ -455,19 +496,32 @@ void jr(char* dReg, char* s2Reg){
     int dregData = registerFile[dRegInt];
     int s2RegInt = binaryToInt(s2Reg);
     int s2RegData = registerFile[s2RegInt];
- 
-    pc = binaryToInt(strcat(intToBinary8(dregData),intToBinary8(s2RegData)));  
+    printf("concatenation of bits: %s\n",strcat(intToBinary8(dregData),intToBinary8(s2RegData)));
+    pc = binaryToInt(strcat(intToBinary8(dregData),intToBinary8(s2RegData))); 
+    printf("pc after jumping: %d\n",pc); 
+    JUMP_FLAG = true;
+    JUMP_FLAG2 = true;
+    
+    fetchCount = INSTRUCTION_COUNT - pc;
+    decodeCount = INSTRUCTION_COUNT - pc;
+    executeCount = INSTRUCTION_COUNT - pc;
 }
 
 void slc(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
-    int immediateInt = binaryToInt(immediate);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    int immediateInt = binaryToInt(immediate); //unsigned
+    if(immediateInt < 0){
+       printf("Invalid shift amount\n");
+       return;
+    }
     int shiftAmount = immediateInt % 8; 
     int negative = NegativeSign((registerFile[dRegInt] << shiftAmount) | (registerFile[dRegInt] >> (8 - shiftAmount)));
 
     int zero = ZeroFlag((registerFile[dRegInt] << shiftAmount) | (registerFile[dRegInt] >> (8 - shiftAmount)));
 
     registerFile[dRegInt] = (registerFile[dRegInt] << shiftAmount) | (registerFile[dRegInt] >> (8 - shiftAmount));
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((negative) << 2);
     statusRegister |= (zero << 0);
@@ -475,12 +529,18 @@ void slc(char* dReg, char* immediate){
 
 void src(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
-    int immediateInt = binaryToInt(immediate);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    int immediateInt = binaryToInt(immediate); //unsigned
+    if(immediateInt < 0){
+       printf("Invalid shift amount\n");
+       return;
+    }
     int shiftAmount = immediateInt % 8; 
     int negative = NegativeSign((registerFile[dRegInt] >> shiftAmount) | (registerFile[dRegInt] << (8 - shiftAmount)));
     int zero = ZeroFlag((registerFile[dRegInt] >> shiftAmount) | (registerFile[dRegInt] << (8 - shiftAmount)));
 
     registerFile[dRegInt] = (registerFile[dRegInt] >> shiftAmount) | (registerFile[dRegInt] << (8 - shiftAmount));
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((negative) << 2);
     statusRegister |= (zero << 0);
@@ -489,13 +549,18 @@ void src(char* dReg, char* immediate){
 void lb(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
     int immediateInt = binaryToInt(immediate);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
     registerFile[dRegInt] = dataMemory[immediateInt];
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
 }
 
 void sb(char* dReg,char* immediate){
     int dRegInt = binaryToInt(dReg);
+    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
     int immediateInt = binaryToInt(immediate);
+    printf("dataMemory[%d]: %d\n",immediateInt,dataMemory[immediateInt]);
     dataMemory[immediateInt] = registerFile[dRegInt];  
+    printf("dataMemory[%d]: %d\n",immediateInt,dataMemory[immediateInt]);
 }
 
 int getReg(char **strings,int index){
@@ -768,6 +833,10 @@ int ZeroFlag(int a) {
     return (a == 0) ? 1 : 0; // Check if the number is zero
 }
 
-bool isBranchOrJump(char* opcode) {
-    return strcmp(opcode, "0100") == 0 || strcmp(opcode, "0111") == 0;
+bool isBranch(char* opcode) {
+    return strcmp(opcode, "0100") == 0;
+}
+
+bool isJump(char* opcode) {
+    return strcmp(opcode, "0111") == 0;
 }
