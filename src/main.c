@@ -137,6 +137,8 @@ int main() {
 
     //print program has ended
     printf("------------Program has ended----------\n");
+    //print cycles
+    printf("Total number of cycles: %d\n",cycles-1);
     //print pc
     printf("PC: %d\n",pc);
     //print SREG
@@ -154,6 +156,17 @@ int main() {
             printf("dataMemory[%d]: %d\n",i,dataMemory[i]);
         }
     }
+
+    //print instructions if not null
+    for(int i = 0; i<INSTRUCTION_COUNT; i++){
+        if(instructionMemory[i]!=NULL){
+            printf("Instruction %d: %s\n",i,instructionMemory[i]);
+        }
+    }
+
+    printf("NOTE: REGISTER/DATA MEMORY/INSTRUCTION MEMORY VALUES ARE ONLY PRINTED IF THEY ARE NOT 0/NULL\n");
+
+    
 
     return 0;
 }
@@ -372,8 +385,8 @@ void executeHelper(char* opcode, char* dReg, char* s2Reg, char* immediate){
 void add(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
-    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
+    printf("registerFile[%d] before change: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] before change: %d\n",s2RegInt,registerFile[s2RegInt]);
 
     int carryOverflow = check_carry_overflow(registerFile[dRegInt], registerFile[s2RegInt], '+') ;
     int negative = NegativeSign(registerFile[dRegInt] + registerFile[s2RegInt]);
@@ -381,7 +394,7 @@ void add(char* dReg, char* s2Reg){
     int zero = ZeroFlag(registerFile[dRegInt] + registerFile[s2RegInt]);
 
     registerFile[dRegInt] = registerFile[dRegInt] + registerFile[s2RegInt];
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] after ADDITION: %d\n",dRegInt,registerFile[dRegInt]);
 
     // Update status register
     statusRegister |= ((carryOverflow & 0b01) << 4);
@@ -394,8 +407,8 @@ void add(char* dReg, char* s2Reg){
 void sub(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
-    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
+    printf("registerFile[%d] before change: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] before change: %d\n",s2RegInt,registerFile[s2RegInt]);
 
     int carryOverflow = check_carry_overflow(registerFile[dRegInt], registerFile[s2RegInt], '-') ;
     int negative = NegativeSign(registerFile[dRegInt] - registerFile[s2RegInt]);
@@ -404,7 +417,7 @@ void sub(char* dReg, char* s2Reg){
 
     
     registerFile[dRegInt] = registerFile[dRegInt] - registerFile[s2RegInt];
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] after SUBTRACTION: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((carryOverflow & 0b10) << 2);
     statusRegister |= ((negative) << 2);
@@ -415,13 +428,14 @@ void sub(char* dReg, char* s2Reg){
 void mul(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
-    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
+    printf("registerFile[%d] before change: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] before change: %d\n",s2RegInt,registerFile[s2RegInt]);
 
     int negative = NegativeSign(registerFile[dRegInt] * registerFile[s2RegInt]);
     int zero = ZeroFlag(registerFile[dRegInt] * registerFile[s2RegInt]);
 
     registerFile[dRegInt] = registerFile[dRegInt] * registerFile[s2RegInt];
+    printf("registerFile[%d] after MULTIPLICATION: %d\n",dRegInt,registerFile[dRegInt]);
 
 
     statusRegister |= ((negative) << 2);
@@ -431,14 +445,14 @@ void mul(char* dReg, char* s2Reg){
 void and(char* dReg, char* s1Reg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
-    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
+    printf("registerFile[%d] before change: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] before change: %d\n",s2RegInt,registerFile[s2RegInt]);
 
     int negative = NegativeSign(registerFile[dRegInt] & registerFile[s2RegInt]);
     int zero = ZeroFlag(registerFile[dRegInt] & registerFile[s2RegInt]);
 
     registerFile[dRegInt] = registerFile[dRegInt] & registerFile[s2RegInt];
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] after BITWISE AND: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((negative) << 2);
     statusRegister |= (zero << 0);
@@ -447,14 +461,14 @@ void and(char* dReg, char* s1Reg, char* s2Reg){
 void or(char* dReg, char* s2Reg){
     int dRegInt = binaryToInt(dReg);
     int s2RegInt = binaryToInt(s2Reg);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
-    printf("registerFile[%d]: %d\n",s2RegInt,registerFile[s2RegInt]);
+    printf("registerFile[%d] before change: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] before change: %d\n",s2RegInt,registerFile[s2RegInt]);
 
     int negative = NegativeSign(registerFile[dRegInt] | registerFile[s2RegInt]);
     int zero = ZeroFlag(registerFile[dRegInt] | registerFile[s2RegInt]);
 
     registerFile[dRegInt] = registerFile[dRegInt] | registerFile[s2RegInt];
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] after BITWISE OR: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((negative) << 2);
     statusRegister |= (zero << 0);
@@ -463,18 +477,18 @@ void or(char* dReg, char* s2Reg){
 void ldi(char* dReg, char* immediate){
     int immediateInt = signedBinaryToInt(immediate);
     int dRegInt = binaryToInt(dReg);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] before change: %d\n",dRegInt,registerFile[dRegInt]);
     registerFile[dRegInt] = immediateInt;
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] after LOADING into it: %d\n",dRegInt,registerFile[dRegInt]);
 }
 
 void beqz(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
     int immediateInt = signedBinaryToInt(immediate);
     if(registerFile[dRegInt] == 0){
-        printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+        printf("PC before change: %d\n",pc);
         pc = pc + immediateInt - 1;
-        printf("PC after branching: %d\n",pc);
+        printf("PC after BRANCHING: %d\n",pc);
         BEQZ_FLAG = true;
         BEQZ_FLAG2 = true;
 
@@ -490,9 +504,10 @@ void jr(char* dReg, char* s2Reg){
     int dregData = registerFile[dRegInt];
     int s2RegInt = binaryToInt(s2Reg);
     int s2RegData = registerFile[s2RegInt];
-    printf("concatenation of bits: %s\n",strcat(intToBinary8(dregData),intToBinary8(s2RegData)));
+    printf("PC will JUMP to: %s\n",strcat(intToBinary8(dregData),intToBinary8(s2RegData)));
+    printf("PC before JUMPING: %d\n",pc);
     pc = binaryToInt(strcat(intToBinary8(dregData),intToBinary8(s2RegData))); 
-    printf("pc after jumping: %d\n",pc); 
+    printf("PC after JUMPING: %d\n",pc); 
     JUMP_FLAG = true;
     JUMP_FLAG2 = true;
     
@@ -503,8 +518,8 @@ void jr(char* dReg, char* s2Reg){
 
 void slc(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
-    int immediateInt = binaryToInt(immediate); //unsigned
+    printf("registerFile[%d] before CIRCULAR SHIFTING LEFT: %d\n",dRegInt,registerFile[dRegInt]);
+    int immediateInt = binaryToInt(immediate); 
     if(immediateInt < 0){
        printf("Invalid shift amount\n");
        return;
@@ -515,7 +530,7 @@ void slc(char* dReg, char* immediate){
     int zero = ZeroFlag((registerFile[dRegInt] << shiftAmount) | (registerFile[dRegInt] >> (8 - shiftAmount)));
 
     registerFile[dRegInt] = (registerFile[dRegInt] << shiftAmount) | (registerFile[dRegInt] >> (8 - shiftAmount));
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] after CIRCULAR SHIFTING LEFT: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((negative) << 2);
     statusRegister |= (zero << 0);
@@ -523,8 +538,8 @@ void slc(char* dReg, char* immediate){
 
 void src(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
-    int immediateInt = binaryToInt(immediate); //unsigned
+    printf("registerFile[%d] before CIRCULAR SHIFTING RIGHT: %d\n",dRegInt,registerFile[dRegInt]);
+    int immediateInt = binaryToInt(immediate); 
     if(immediateInt < 0){
        printf("Invalid shift amount\n");
        return;
@@ -534,7 +549,7 @@ void src(char* dReg, char* immediate){
     int zero = ZeroFlag((registerFile[dRegInt] >> shiftAmount) | (registerFile[dRegInt] << (8 - shiftAmount)));
 
     registerFile[dRegInt] = (registerFile[dRegInt] >> shiftAmount) | (registerFile[dRegInt] << (8 - shiftAmount));
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] after CIRCULAR SHIFTING RIGHT: %d\n",dRegInt,registerFile[dRegInt]);
 
     statusRegister |= ((negative) << 2);
     statusRegister |= (zero << 0);
@@ -543,18 +558,18 @@ void src(char* dReg, char* immediate){
 void lb(char* dReg, char* immediate){
     int dRegInt = binaryToInt(dReg);
     int immediateInt = binaryToInt(immediate);
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] before LOADING FROM MEMORY: %d\n",dRegInt,registerFile[dRegInt]);
     registerFile[dRegInt] = dataMemory[immediateInt];
-    printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
+    printf("registerFile[%d] after LOADING FROM MEMORY: %d\n",dRegInt,registerFile[dRegInt]);
 }
 
 void sb(char* dReg,char* immediate){
     int dRegInt = binaryToInt(dReg);
     printf("registerFile[%d]: %d\n",dRegInt,registerFile[dRegInt]);
     int immediateInt = binaryToInt(immediate);
-    printf("dataMemory[%d]: %d\n",immediateInt,dataMemory[immediateInt]);
+    printf("dataMemory[%d] before STORING INTO MEMORY: %d\n",immediateInt,dataMemory[immediateInt]);
     dataMemory[immediateInt] = registerFile[dRegInt];  
-    printf("dataMemory[%d]: %d\n",immediateInt,dataMemory[immediateInt]);
+    printf("dataMemory[%d] after STORING INTO MEMORY: %d\n",immediateInt,dataMemory[immediateInt]);
 }
 
 int getReg(char **strings,int index){
